@@ -1,0 +1,180 @@
+---
+title: "PAL_Network_Task_Case_1"
+author: "Augustine Malija"
+date: "2023-09-09"
+output: html_document
+---
+## Loading Libraries
+```{r, message=FALSE}
+#loading libraries
+library(readxl)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+
+```
+
+
+## Importing Dataset
+```{r}
+#reading the dataset in R
+assessment <- readxl::read_xls("/cloud/project/2. ICAN_2022_SSA - sample.xls")
+```
+
+
+## Data Wrangling
+```{r}
+#extracting variables of interest
+#names(assessment)
+interest_variables <- assessment %>% 
+  select("countryname", "age", "female", "enr_status", "grade", "help_home", "electricity", "has_textbook", "computer_laptop", "television", "smartphone", "enr_status", "mq5", "mq6","mq22","mq23", "mq29", "mq30", "mq31", "mq32", "mq12", "mq1", "mq3", "mq19", "mq27", "mq33", "mq34") %>% 
+
+  #renaming variables
+  select(everything(),
+         gender = "female",
+         quality_help_home = "help_home",
+         quality_electricity_access = "electricity",
+         access_enrollment = "enr_status",
+         access_textbook_ownership = "has_textbook",
+         access_computer = "computer_laptop",
+         access_television = "television",
+         access_smartphone = "smartphone",
+         math_q5 = "mq5",
+         math_q6 = "mq6",
+         math_q22 = "mq22",
+         math_q23 = "mq23",
+         math_q29 = "mq29",
+         math_q30 = "mq30",
+         math_q31 = "mq31",
+         math_q32 = "mq32",
+         comprehension_q12 = "mq12",
+         comprehension_q1 = "mq1",
+         comprehension_q3 = "mq3",
+         comprehension_q19 = "mq19",
+         comprehension_q27 = "mq27",
+         comprehension_q33 = "mq33",
+         comprehension_q34 = "mq34")
+```
+
+## Analysis of Learning Poverty
+```{r, warning=FALSE}
+#performance in math and comprehension/reading by gender
+
+learning_poverty_status <- interest_variables %>% 
+  #selecting variables representing math and reading
+  select("countryname", "age", "gender", "math_q5", "math_q6", "math_q22", "math_q23", "math_q29", "math_q30", "math_q31", "math_q32", "comprehension_q12", "comprehension_q1", "comprehension_q3", "comprehension_q19", "comprehension_q27", "comprehension_q33", "comprehension_q34") %>% 
+  #determining how much in total every surveyed child has scored in math and reading
+  mutate(mathematics = rowSums(.[which(colnames(.)=="math_q5"):which(colnames(.)=="math_q32")], na.rm=TRUE),
+         reading = rowSums(.[which(colnames(.)=="comprehension_q12"):which(colnames(.)=="comprehension_q34")], na.rm=TRUE)) %>% 
+  #capturing until age 10 to reflect World Bank's learning poverty definition
+filter(age <= 10)
+
+avg_learnpov <- learning_poverty_status %>% 
+  #determining the avearge score by gender
+  filter(!is.na(gender)) %>%
+  group_by(gender) %>% 
+  summarise(avg_math = mean(mathematics, na.rm = T),
+            avg_reading = mean(reading, na.rm = T))
+
+
+#determining how many students cannot totally read or understand text by age 10 per country
+
+low_performing <- learning_poverty_status %>%
+  #extracting ones that scored 0
+  filter(reading == 0 & mathematics == 0) %>% 
+  #etracting values by gender
+  group_by(countryname, gender) %>% 
+  summarise(count_reading = n(),
+            count_mathematics = n()) %>% 
+  #given frequencies are the same for reading and math across gender and country, I calculate their average
+  ungroup() %>% 
+  mutate(avg_learnpov = rowMeans(.[c("count_reading", "count_mathematics")], na.rm = TRUE)) %>% 
+  #introducing percentages
+  mutate(perc_learnpov = 100/sum(avg_learnpov)*avg_learnpov)
+```
+### Visualizing Learning Poverty
+```{r}
+ggplot(low_performing,
+       aes(x = countryname, y = perc_learnpov, fill = gender))+
+  geom_bar(stat = "identity", position = position_dodge())+
+  #setting a clear background
+  theme_minimal()+
+  #omitting the draft lines behind the plot
+  theme(panel.grid = element_blank())
+
+  #saving the plot as png
+  #ggsave("Country Learning Poverty By Gender.png", width = 12, dpi = 400)
+```
+```{r}
+high_performing <- avg_learnpov %>% 
+  #writing the dataset in a longer format
+  pivot_longer(c("avg_math", "avg_reading"), names_to = "subject_names", values_to = "avg_scores")
+
+#plotting
+ggplot(high_performing,
+       aes(x = subject_names, y = avg_scores, fill = gender))+
+  geom_bar(stat = "identity", position = position_dodge())+
+  #setting a clear background
+  theme_minimal()+
+  #omitting the draft lines behind the plot
+  theme(panel.grid = element_blank())#+
+  #saving the plot as png
+  #ggsave("Gender Parity in Learning Poverty.png", width = 12, dpi = 400)
+```
+
+## Analysis of Quality of Education
+```{r}
+#the status of education access and quality
+
+access_quality <- interest_variables %>% 
+  #selecting out variables for access and quality
+  select("countryname", "gender", "quality_help_home", "quality_electricity_access", "access_enrollment", "access_textbook_ownership", "access_computer", "access_television", "access_smartphone") %>% 
+  #assigning binary variables to quality and access indicators
+  mutate(quality_help_home = ifelse(quality_help_home == "Yes", 1,0),
+         quality_electricity_access = ifelse(quality_electricity_access == "Yes",1,0),
+         access_enrollment = ifelse(access_enrollment == "Enrolled", 1,0),
+         access_textbook_ownership = ifelse(access_textbook_ownership == "Yes", 1,0),
+         access_computer = ifelse(access_computer == "Yes", 1,0),
+         access_television = ifelse(access_television == "Yes", 1,0),
+         access_smartphone = ifelse(access_smartphone == "Yes", 1,0)) %>% 
+  #determining how each surveyed student scored on quality and access dimensions
+  #using placeholder assignee and indexing
+  mutate(quality = rowSums(.[which(colnames(.)=="quality_help_home"):which(colnames(.)=="quality_electricity_access")], na.rm=TRUE),
+         access = rowSums(.[which(colnames(.)=="access_enrollment"):which(colnames(.)=="access_smartphone")], na.rm=TRUE)) %>% 
+  #determining the avearage score per country
+  group_by(countryname) %>% 
+  summarise(avg_quality = mean(quality, na.rm = T),
+            avg_access = mean(access, na.rm = T)) %>% 
+  #observing the same chronological performance per country in both dimensions
+  #I calculate the average
+  group_by(countryname) %>% 
+  summarise(avg_learnpov_scores = mean(c(avg_quality, avg_access))) %>% 
+  #arranging them in a descending order
+  arrange(desc(avg_learnpov_scores))
+
+scores_rank <- access_quality %>% 
+  #adding a rank variable
+  mutate(rank = 1:nrow(access_quality))
+```
+
+### Visualizing Quality of Education
+```{r}
+ggplot(scores_rank, 
+       aes(x = factor(rank), y = avg_learnpov_scores, fill = countryname)) +
+  #making colors are painted based on rankings
+  geom_col(position = position_dodge()) +
+  #setting a clear background
+  theme_minimal()+
+  #omitting the draft lines behind the plot
+  theme(panel.grid = element_blank())+
+  #specifying axis names
+  labs(title = "Country Ranks on Quality of Education",
+       x = "Ranking",
+       y = "Overall Average of Access and Quality")+
+  #attaching text to bars, adjusting its size and color
+  geom_text(aes(label = countryname, vjust = -0.5), color = "black", size = 5)
+
+  #saving as png
+  #ggsave("Overall Average of Access and Quality.png", width = 12, dpi = 400)
+```
+
