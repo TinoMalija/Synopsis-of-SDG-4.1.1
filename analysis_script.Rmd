@@ -1,5 +1,5 @@
 ---
-title: "PAL_Network_Task_Case_1"
+title: "Education SDG Synopsis"
 author: "Augustine Malija"
 date: "2023-09-09"
 output: html_document
